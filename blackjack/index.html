@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Eight-Deck Coach</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Eight-deck blackjack trainer built on Norm Wattenberger's Modern Blackjack: basic strategy, REKO and Hi-Lo counting, drills, and game ratings.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;800&family=Bodoni+Moda:opsz,wght@6..96,600&family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="#table" aria-label="Eight-Deck Coach home">
+      <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+      <span class="brand-name">Eight-Deck Coach</span>
+    </a>
+    <nav class="tabs" aria-label="Sections">
+      <a href="#table" data-view="table">Table</a>
+      <a href="#drills" data-view="drills">Drills</a>
+      <a href="#chart" data-view="chart">Chart</a>
+      <a href="#scout" data-view="scout">Game Scout</a>
+      <a href="#progress" data-view="progress">Progress</a>
+      <a href="#playbook" data-view="playbook">Playbook</a>
+    </nav>
+    <button class="rules-chip" id="open-settings" type="button" aria-haspopup="dialog" aria-controls="settings">
+      <span id="rules-summary">8D · S17 · DAS · LS</span>
+      <span class="chip-sys" id="system-summary">REKO</span>
+    </button>
+  </div>
+</header>
+
+<main>
+  <section class="view" id="view-table" aria-label="Practice table"></section>
+  <section class="view" id="view-drills" aria-label="Drills" hidden></section>
+  <section class="view" id="view-chart" aria-label="Strategy chart" hidden></section>
+  <section class="view" id="view-scout" aria-label="Game Scout" hidden></section>
+  <section class="view" id="view-progress" aria-label="Progress" hidden></section>
+  <section class="view" id="view-playbook" aria-label="Playbook" hidden></section>
+</main>
+
+<div class="drawer-scrim" id="settings-scrim" hidden></div>
+<aside class="drawer" id="settings" role="dialog" aria-modal="true" aria-labelledby="settings-title" hidden></aside>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<script src="js/cards.js"></script>
+<script src="js/book.js"></script>
+<script src="js/strategy.js"></script>
+<script src="js/game.js"></script>
+<script src="js/tables8.js"></script>
+<script src="js/store.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/table.js"></script>
+<script src="js/drills.js"></script>
+<script src="js/views.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
