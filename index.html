@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Sigil</title>
+  <meta name="description" content="Cast spells with your hands. Pinch, draw a glyph in the air, release." />
+  <meta name="theme-color" content="#05040b" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet" />
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.187.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.187.0/examples/jsm/",
+        "@mediapipe/tasks-vision": "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.2.3/vision_bundle.mjs"
+      }
+    }
+  </script>
+  <style>
+    :root {
+      --void: #05040b;
+      --ink: #e9e1ff;
+      --gold: #ffd27a;
+      --serif: 'Cormorant Garamond', 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; overflow: hidden; background: var(--void); color: var(--ink); font-family: var(--serif); }
+    body { -webkit-font-smoothing: antialiased; user-select: none; -webkit-user-select: none; }
+    canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; touch-action: none; }
+    body.live canvas { cursor: none; }
+    button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+    button:focus-visible { outline: 1px solid rgba(255, 210, 122, .6); outline-offset: 6px; }
+
+    /* ------------------------------------------------------------ start */
+    #start {
+      position: fixed; inset: 0; display: grid; place-items: center; align-content: center; gap: 2.4rem;
+      text-align: center; padding: 16px; transition: opacity 1.4s ease, visibility 0s linear 1.4s;
+      background: radial-gradient(ellipse at 50% 45%, rgba(5, 4, 11, 0) 0%, rgba(5, 4, 11, .55) 70%);
+    }
+    #start.gone { opacity: 0; visibility: hidden; pointer-events: none; }
+    #sigil { width: min(38vmin, 260px); height: auto; overflow: visible; filter: drop-shadow(0 0 6px rgba(255, 210, 122, .9)) drop-shadow(0 0 24px rgba(255, 170, 80, .45)); animation: turn 60s linear infinite; }
+    #sigil path { fill: none; stroke: #ffe3a8; stroke-width: .9; stroke-linecap: round; stroke-linejoin: round;
+      stroke-dasharray: 1; stroke-dashoffset: 1; animation: draw 2.6s cubic-bezier(.6, .1, .2, 1) var(--d) forwards, breathe 4s ease-in-out calc(var(--d) + 2.6s) infinite; }
+    @keyframes draw { to { stroke-dashoffset: 0; } }
+    @keyframes breathe { 50% { opacity: .55; } }
+    @keyframes turn { to { transform: rotate(360deg); } }
+    #start h1 { font-weight: 300; font-size: clamp(1.4rem, 3.2vw, 2.2rem); letter-spacing: .32em; text-indent: .32em; opacity: .78; font-style: italic; }
+    #begin { font-size: 1rem; letter-spacing: .6em; text-indent: .6em; text-transform: uppercase; opacity: .7; padding: .9rem 1.6rem; position: relative; transition: opacity .4s, letter-spacing .6s; }
+    #begin::before, #begin::after { content: ''; position: absolute; left: 50%; width: 3.5rem; height: 1px; background: linear-gradient(90deg, transparent, var(--gold), transparent); transform: translateX(-50%); transition: width .6s; }
+    #begin::before { top: 0; } #begin::after { bottom: 0; }
+    #begin:hover, #begin:focus-visible { opacity: 1; letter-spacing: .7em; }
+    #begin:hover::before, #begin:hover::after { width: 8rem; }
+    #start small { pointer-events: none; position: absolute; bottom: max(24px, env(safe-area-inset-bottom)); left: 16px; right: 16px; font-size: .9rem; letter-spacing: .14em; opacity: .38; }
+
+    /* ---------------------------------------------------------- notices */
+    #notice, #tutorial { position: fixed; left: 16px; right: 16px; text-align: center; pointer-events: none;
+      font-style: italic; font-weight: 300; letter-spacing: .14em; opacity: 0; transition: opacity 1.2s ease; }
+    #notice { top: 9vh; font-size: clamp(1rem, 1.6vw, 1.25rem); }
+    #tutorial { bottom: 11vh; font-size: clamp(1.05rem, 1.8vw, 1.4rem); color: #ffe7bb; }
+    #notice.show { opacity: .7; } #tutorial.show { opacity: .8; }
+
+    /* --------------------------------------------------------- namecard */
+    #namecard { position: fixed; inset: 0; display: grid; place-items: center; align-content: center; pointer-events: none; text-align: center; opacity: 0; }
+    #namecard .n { font-size: clamp(3.4rem, 11vw, 8.5rem); font-weight: 300; letter-spacing: .38em; text-indent: .38em; line-height: 1;
+      color: #fff; text-shadow: 0 0 18px var(--c), 0 0 60px var(--c); }
+    #namecard .s { margin-top: 1.2rem; font-size: clamp(1rem, 2vw, 1.4rem); font-style: italic; letter-spacing: .3em; opacity: .75; }
+    #namecard.show { animation: card 2.6s cubic-bezier(.2, .7, .2, 1) forwards; }
+    @keyframes card {
+      0% { opacity: 0; transform: scale(.96); filter: blur(10px); }
+      18% { opacity: .62; transform: none; filter: blur(0); }
+      46% { opacity: .62; transform: none; filter: blur(0); }
+      100% { opacity: 0; transform: translateY(-9vh); filter: blur(14px); }
+    }
+
+    /* --------------------------------------------------------- grimoire */
+    #grimoire { position: fixed; left: 0; top: 50%; transform: translateY(-50%); display: flex; align-items: center;
+      opacity: 0; transition: opacity 1.5s ease .6s; pointer-events: none; }
+    body.live #grimoire { opacity: 1; pointer-events: auto; }
+    #grimoire ol { list-style: none; display: grid; gap: .35rem; padding: 1.2rem .9rem 1.2rem max(14px, env(safe-area-inset-left));
+      border-right: 1px solid rgba(233, 225, 255, .08); background: linear-gradient(90deg, rgba(5, 4, 11, .7), rgba(5, 4, 11, 0));
+      transition: transform .7s cubic-bezier(.2, .7, .2, 1), opacity .5s; }
+    #grimoire:not(.open) ol { transform: translateX(-110%); opacity: 0; pointer-events: none; }
+    #grimoire li button { display: grid; grid-template-columns: 2.6rem auto; grid-template-rows: auto auto; column-gap: .7rem; align-items: center; text-align: left; padding: .25rem .2rem; }
+    #grimoire svg { grid-row: span 2; width: 2.6rem; height: 2.6rem; overflow: visible; }
+    #grimoire svg path { fill: none; stroke: var(--c); stroke-width: 3.2; stroke-linecap: round; stroke-linejoin: round; opacity: .22; transition: opacity .6s, filter .6s; }
+    #grimoire .nm { font-size: 1.05rem; letter-spacing: .3em; opacity: .28; transition: opacity .6s; }
+    #grimoire .ky { font-size: .78rem; letter-spacing: .2em; opacity: .2; }
+    #grimoire li.lit svg path { opacity: .9; filter: drop-shadow(0 0 3px var(--c)) drop-shadow(0 0 8px var(--c)); }
+    #grimoire li.lit .nm { opacity: .7; }
+    #grimoire li:hover .nm, #grimoire li:focus-within .nm { opacity: 1; }
+    #grimoire li.trace svg path { stroke-dasharray: 1; animation: trace 1.3s cubic-bezier(.5, 0, .2, 1); }
+    @keyframes trace { from { stroke-dashoffset: 1; opacity: 1; } to { stroke-dashoffset: 0; } }
+    #grimoire li.flare svg path { animation: flare 1.4s ease-out; }
+    @keyframes flare { 0% { filter: drop-shadow(0 0 2px #fff) drop-shadow(0 0 18px var(--c)); opacity: 1; } }
+    #grimoire .tab { width: 1.6rem; height: 4.5rem; display: grid; place-items: center; opacity: .35; transition: opacity .3s; }
+    #grimoire .tab:hover { opacity: .9; }
+    #grimoire .tab i { width: 1px; height: 100%; background: linear-gradient(transparent, var(--ink), transparent); position: relative; }
+    #grimoire .tab i::after { content: ''; position: absolute; top: 50%; left: -3px; width: 6px; height: 6px; border: solid var(--ink); border-width: 1px 1px 0 0; transform: translate(2px, -50%) rotate(45deg); transition: transform .5s; }
+    #grimoire.open .tab i::after { transform: translate(-1px, -50%) rotate(-135deg); }
+    #grimoire .keys { font-size: .72rem; letter-spacing: .22em; opacity: .25; padding: .6rem .2rem 0; line-height: 1.7; }
+
+    /* ----------------------------------------------------------- status */
+    #status { position: fixed; right: max(16px, env(safe-area-inset-right)); bottom: max(16px, env(safe-area-inset-bottom)); display: flex; align-items: center; gap: .6rem;
+      opacity: 0; transition: opacity 1s; font-size: .85rem; letter-spacing: .2em; font-style: italic; }
+    body.live #status { opacity: 1; }
+    #status .dot { width: 7px; height: 7px; border-radius: 50%; background: #8a7fb8; box-shadow: 0 0 6px #8a7fb8; transition: background .4s, box-shadow .4s; }
+    #status .lbl { opacity: 0; transition: opacity .4s; }
+    #status:hover .lbl { opacity: .55; }
+    #status[data-kind="tracking"] .dot { background: #ffd27a; box-shadow: 0 0 8px #ffd27a, 0 0 16px #ffa040; }
+    #status[data-kind="pinch"] .dot { background: #fff4dc; box-shadow: 0 0 10px #fff, 0 0 22px #ffd27a; }
+    #status[data-kind="loading"] .dot { animation: pulse 1.2s ease-in-out infinite; }
+    #status[data-kind="pointer"] .dot { background: transparent; border: 1px solid #b6a9e6; box-shadow: none; }
+    #status[data-kind="searching"] .dot { background: #4b4270; box-shadow: none; }
+    @keyframes pulse { 50% { opacity: .25; } }
+
+    noscript { position: fixed; inset: 0; display: grid; place-items: center; letter-spacing: .2em; }
+    @media (max-width: 640px) {
+      #grimoire .nm, #grimoire .ky, #grimoire .keys { display: none; }
+      #grimoire li button { grid-template-columns: 2.2rem; }
+      #grimoire svg { width: 2.2rem; height: 2.2rem; }
+    }
+    @media (max-height: 520px) {
+      #start { gap: 1rem; }
+      #sigil { width: min(30vmin, 160px); }
+      #start small { display: none; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      #sigil { animation: none; }
+      #namecard.show { animation-duration: 2.2s; }
+    }
+  </style>
+</head>
+<body>
+  <section id="start" aria-labelledby="start-line">
+    <svg id="sigil" viewBox="0 0 100 100" role="img" aria-label="A glowing sigil"></svg>
+    <h1 id="start-line">Raise your hand.</h1>
+    <button id="begin" type="button">Begin</button>
+    <small>Pinch thumb and finger, draw a glyph in the air, release.</small>
+  </section>
+
+  <nav id="grimoire" aria-label="Grimoire">
+    <div>
+      <ol></ol>
+      <p class="keys">1–6 cast · G ghost · Esc dispel</p>
+    </div>
+    <button class="tab" type="button" aria-label="Toggle grimoire"><i></i></button>
+  </nav>
+
+  <div id="namecard" aria-live="polite"><div class="n"></div><div class="s"></div></div>
+  <p id="notice" aria-live="polite"></p>
+  <p id="tutorial" aria-live="polite"></p>
+  <div id="status" data-kind="pointer"><span class="lbl"></span><span class="dot"></span></div>
+
+  <noscript>Sigil needs JavaScript and WebGL.</noscript>
+  <script type="module" src="./main.js"></script>
+</body>
+</html>
