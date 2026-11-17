@@ -267,6 +267,44 @@ function dispel() {
 }
 
 // ------------------------------------------------------------- per frame --
+// ------------------------------------------------- hand as a pointer --
+// The wand tip can hover and pinch-select the grimoire glyphs and the runestones.
+const raycaster = new THREE.Raycaster();
+const _ndc = new THREE.Vector2();
+const _hits = [];
+const hover = { el: null, stone: null };
+
+function handTarget() {
+  const px = (cursor.x / aspect + 1) / 2 * W, py = (1 - cursor.y) / 2 * H;
+  const el = document.elementFromPoint(px, py)?.closest('#grimoire button');
+  if (el) return { el, stone: null };
+  _ndc.set(cursor.x / aspect, cursor.y);
+  raycaster.setFromCamera(_ndc, world.camera);
+  for (const st of world.stones) {
+    _hits.length = 0;
+    if (raycaster.intersectObject(st.mesh, false, _hits).length) return { el: null, stone: st };
+  }
+  return null;
+}
+
+function setHover(target) {
+  const el = target?.el || null, stone = target?.stone || null;
+  if (el === hover.el && stone === hover.stone) return;
+  if (hover.el) { hover.el.closest('li')?.classList.remove('hand-hover'); hover.el.classList.remove('hand-hover'); }
+  if (hover.el || hover.stone) { trail.stopGhost(); if (S.tutorial) setTimeout(startTutorialGhost, 450); }
+  hover.el = el; hover.stone = stone;
+  const li = el?.closest('li');
+  const spell = li ? SPELLS.find((sp) => sp.id === li.dataset.id) : stone?.spell;
+  if (el) (li || el).classList.add('hand-hover');
+  if (spell) { if (li) ui.trace(spell.id); showGhostFor(spell); }
+}
+
+function activate(target) {
+  trail.stopGhost();
+  if (target.el) target.el.click();            // grimoire glyph → cast, tab → toggle
+  else if (target.stone) castByKey(target.stone.spell);
+}
+
 function updateInput(dt) {
   const handReady = hands.status === 'ready';
   hands.update(performance.now(), dt, aspect);
@@ -299,7 +337,13 @@ function updateInput(dt) {
   if (hands.present) {
     S.handLostT = 0;
     if (!hands.pinch) S.suppress = false;
-    if (!S.drawing && hands.pinch && !S.suppress && !pointer.down) startStroke('hand');
+    const target = S.drawing ? null : handTarget();
+    setHover(target);
+    if (hover.stone) hover.stone.active = Math.max(hover.stone.active, 0.6);
+    if (!S.drawing && hands.pinch && !S.suppress && !pointer.down) {
+      if (target) { activate(target); S.suppress = true; } // pinch on a sigil selects it; wait for release
+      else startStroke('hand');
+    }
     else if (S.drawing && S.source === 'hand') {
       if (hands.fist) cancelStroke();
       else if (!hands.pinch) endStroke();
@@ -310,7 +354,8 @@ function updateInput(dt) {
       S.palmT += dt;
       if (S.palmT >= PALM_HOLD && !S.palmFired) { S.palmFired = true; dispel(); }
     } else { S.palmT = 0; S.palmFired = false; }
-  } else if (S.drawing && S.source === 'hand') {
+  } else if (hover.el || hover.stone) setHover(null);
+  if (!hands.present && S.drawing && S.source === 'hand') {
     S.handLostT += dt;
     if (S.handLostT > 0.25) endStroke(); // hand left the frame: treat as a release
   }

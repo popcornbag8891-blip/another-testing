@@ -79,7 +79,7 @@
       opacity: 0; transition: opacity 1.5s ease .6s; pointer-events: none; }
     body.live #grimoire { opacity: 1; pointer-events: auto; }
     #grimoire ol { list-style: none; display: grid; gap: .35rem; padding: 1.2rem .9rem 1.2rem max(14px, env(safe-area-inset-left));
-      border-right: 1px solid rgba(233, 225, 255, .08); background: linear-gradient(90deg, rgba(5, 4, 11, .7), rgba(5, 4, 11, 0));
+      border-right: 1px solid rgba(233, 225, 255, .08); background: linear-gradient(90deg, rgba(5, 4, 11, .32), rgba(5, 4, 11, 0));
       transition: transform .7s cubic-bezier(.2, .7, .2, 1), opacity .5s; }
     #grimoire:not(.open) ol { transform: translateX(-110%); opacity: 0; pointer-events: none; }
     #grimoire li button { display: grid; grid-template-columns: 2.6rem auto; grid-template-rows: auto auto; column-gap: .7rem; align-items: center; text-align: left; padding: .25rem .2rem; }
@@ -89,7 +89,9 @@
     #grimoire .ky { font-size: .78rem; letter-spacing: .2em; opacity: .2; }
     #grimoire li.lit svg path { opacity: .9; filter: drop-shadow(0 0 3px var(--c)) drop-shadow(0 0 8px var(--c)); }
     #grimoire li.lit .nm { opacity: .7; }
-    #grimoire li:hover .nm, #grimoire li:focus-within .nm { opacity: 1; }
+    #grimoire li:hover .nm, #grimoire li:focus-within .nm, #grimoire li.hand-hover .nm { opacity: 1; }
+    #grimoire li.hand-hover svg path { opacity: 1; filter: drop-shadow(0 0 3px var(--c)) drop-shadow(0 0 10px var(--c)); }
+    #grimoire .tab.hand-hover { opacity: .9; }
     #grimoire li.trace svg path { stroke-dasharray: 1; animation: trace 1.3s cubic-bezier(.5, 0, .2, 1); }
     @keyframes trace { from { stroke-dashoffset: 1; opacity: 1; } to { stroke-dashoffset: 0; } }
     #grimoire li.flare svg path { animation: flare 1.4s ease-out; }

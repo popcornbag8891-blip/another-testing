@@ -35,6 +35,7 @@ Any direction works. Cast two spells within 4 s for a combo.
 
 - **Hand:** pinch to draw, release to cast. Fist while drawing cancels.
   Hold an open palm for 0.6 s to dispel everything.
+  Hover the wand tip over a grimoire glyph or a runestone and pinch to cast it.
 - **Mouse / touch:** press and drag to draw (automatic when no camera).
 - **Keys:** `1`–`6` cast directly · `G` shows the next glyph's ghost · `Esc` dispels.
 
