@@ -43,6 +43,16 @@ const skyMat = () => new THREE.ShaderMaterial({
       float rays = 0.55 + 0.45 * fbm(vec2(ang * 6.0, uTime * 0.05));
       vec3 sun = vec3(1.0, 0.72, 0.38) * (exp(-r * 6.0) * 0.32 + exp(-r * 24.0) * 0.8) + vec3(1.0, 0.55, 0.3) * exp(-r * 2.2) * 0.16 * rays;
       col += sun * uDawn;
+      // Nebula: two warped fbm layers tinted by the ambient light and a cold blue.
+      vec2 q = uv * vec2(3.2, 1.7);
+      float n1 = fbm(q * 1.2 + vec2(uTime * 0.006, uTime * 0.002));
+      float n2 = fbm(q * 2.6 - 3.1 + n1 * 1.8 - uTime * 0.004);
+      float neb = pow(clamp(n1 * n2 * 2.2, 0.0, 1.0), 2.2);
+      col += mix(uAmbient * 1.4, vec3(0.08, 0.16, 0.42), smoothstep(0.3, 0.7, n2)) * neb * 0.42 * (1.0 - uDawn * 0.6);
+      // Faint star dust that's always there.
+      vec2 g = uv * vec2(1100.0, 580.0); vec2 id = floor(g); float hs = h21(id);
+      float tw = 0.4 + 0.6 * sin(uTime * (0.7 + hs * 4.0) + hs * 60.0);
+      col += vec3(0.75, 0.82, 1.0) * step(0.9972, hs) * tw * smoothstep(0.55, 0.0, length(fract(g) - 0.5)) * 0.9 * (1.0 - uDawn * 0.7);
       gl_FragColor = vec4(col, 1.0);
     }`,
   depthWrite: false,
@@ -165,6 +175,85 @@ const webcamMat = () => new THREE.ShaderMaterial({
   blending: THREE.AdditiveBlending, transparent: true, depthTest: false, depthWrite: false,
 });
 
+const sigilMat = () => new THREE.ShaderMaterial({
+  uniforms: { uTime: { value: 0 }, uSpin: { value: 0 }, uIntensity: { value: 0.3 }, uColor: { value: new THREE.Color() }, uFlash: { value: new THREE.Color() }, uFlashAmt: { value: 0 } },
+  vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+  fragmentShader: /* glsl */ `
+    uniform float uTime, uSpin, uIntensity, uFlashAmt; uniform vec3 uColor, uFlash; varying vec2 vUv;
+    float h11(float x){ return fract(sin(x * 127.1) * 43758.5453); }
+    float ln(float d, float w){ float aa = fwidth(d) * 1.2; return smoothstep(w + aa, w, abs(d)); }
+    void main(){
+      vec2 p = (vUv - 0.5) * 2.0;
+      float r = length(p), a = atan(p.y, p.x);
+      const float TAU = 6.2831853;
+      float v = 0.0;
+      // Concentric rings.
+      v += ln(r - 0.965, 0.004) * 1.2 + ln(r - 0.93, 0.0025) * 0.8 + ln(r - 0.845, 0.002) + ln(r - 0.69, 0.003) + ln(r - 0.63, 0.0018) * 0.8 + ln(r - 0.3, 0.002);
+      // Ticks between the outer rings.
+      float a1 = a + uSpin * 0.35;
+      v += step(fract(a1 * 72.0 / TAU), 0.1) * step(0.935, r) * step(r, 0.96) * 0.9;
+      v += step(fract(a1 * 12.0 / TAU), 0.02) * step(0.85, r) * step(r, 0.965) * 1.2;
+      // Band of runes: each angular cell gets a little procedural glyph.
+      float a2 = a - uSpin * 0.55;
+      float cells = 32.0, ci = floor(a2 * cells / TAU), fx = fract(a2 * cells / TAU);
+      float fy = (r - 0.705) / 0.125;
+      if (fy > 0.0 && fy < 1.0) {
+        vec2 c = vec2(fx, fy) - 0.5;
+        float hA = h11(ci), hB = h11(ci + 31.7), hC = h11(ci + 77.3);
+        float g = ln(c.x, 0.035) * step(abs(c.y), 0.34);                                  // stem
+        g += step(0.35, hA) * ln(c.y - c.x * 1.4 * sign(hB - 0.5) - 0.05, 0.03) * step(abs(c.x), 0.28) * step(abs(c.y), 0.34);
+        g += step(0.55, hB) * ln(c.y - (hC - 0.5) * 0.5, 0.03) * step(abs(c.x), 0.25);  // crossbar
+        g += step(0.7, hC) * ln(length(c - vec2(0.0, 0.18)) - 0.11, 0.025);            // ring
+        v += g * 0.9;
+      }
+      // Hexagram inscribed in the inner ring, turning the other way.
+      float a3 = uSpin * -0.25;
+      float hex = 0.0;
+      for (int k = 0; k < 6; k++) {
+        float t = a3 + float(k) * TAU / 6.0;
+        hex += ln(dot(p, vec2(cos(t), sin(t))) - 0.315, 0.0025);
+      }
+      v += hex * step(r, 0.63);
+      // Small circles at the hexagram points.
+      for (int k = 0; k < 6; k++) {
+        float t = a3 + float(k) * TAU / 6.0 + TAU / 12.0;
+        v += ln(length(p - 0.63 * vec2(cos(t), sin(t))) - 0.045, 0.002) * 0.8;
+      }
+      float shimmer = 0.75 + 0.25 * sin(a * 3.0 - uTime * 0.8) * sin(r * 20.0 + uTime * 0.6);
+      float fade = smoothstep(1.0, 0.97, r);
+      vec3 col = mix(uColor, uFlash, uFlashAmt) * v * shimmer * fade * (uIntensity + uFlashAmt * 0.75);
+      col += mix(uColor, uFlash, uFlashAmt) * exp(-r * r * 6.0) * 0.05 * (uIntensity + uFlashAmt * 0.6);  // core glow
+      gl_FragColor = vec4(col, 1.0);
+    }`,
+  blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, side: THREE.DoubleSide,
+});
+
+const shaftMat = (seed) => new THREE.ShaderMaterial({
+  uniforms: { uColor: { value: new THREE.Color() }, uTime: { value: 0 }, uI: { value: 0.2 }, uSeed: { value: seed } },
+  vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+  fragmentShader: /* glsl */ `
+    uniform vec3 uColor; uniform float uTime, uI, uSeed; varying vec2 vUv;
+    ${vnoiseGLSL}
+    void main(){
+      float x = (vUv.x - 0.5) * 2.0;
+      float beam = exp(-x * x * 3.5);
+      float along = smoothstep(0.0, 0.55, vUv.y) * smoothstep(1.0, 0.85, vUv.y);
+      float dust = 0.6 + 0.4 * fbm(vec2(x * 3.0 + uSeed, vUv.y * 4.0 - uTime * 0.05));
+      float flick = 0.8 + 0.2 * sin(uTime * 0.31 + uSeed * 7.0);
+      gl_FragColor = vec4(uColor * beam * along * dust * flick * uI, 1.0);
+    }`,
+  blending: THREE.AdditiveBlending, transparent: true, depthWrite: false,
+});
+
+const auraMat = (color) => new THREE.ShaderMaterial({
+  uniforms: { uColor: { value: color.clone() }, uI: { value: 0 } },
+  vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+  fragmentShader: `uniform vec3 uColor; uniform float uI; varying vec2 vUv;
+    void main(){ vec2 d = (vUv - 0.5) * vec2(1.6, 1.0) * 2.0; float r2 = dot(d, d);
+      gl_FragColor = vec4(uColor * (exp(-r2 * 3.0) * 0.6 + exp(-r2 * 12.0) * 0.5) * uI, 1.0); }`,
+  blending: THREE.AdditiveBlending, transparent: true, depthWrite: false,
+});
+
 // ------------------------------------------------------------- formations --
 function formation(name) {
   const out = [];
@@ -250,6 +339,8 @@ export class World {
     this._buildFire();
     this._buildStars();
     this._buildBolts();
+    this._buildSigil();
+    this._buildShafts();
 
     this._v = new THREE.Vector3();
     this._spring = { k: 22, c: 5.6 };
@@ -261,6 +352,31 @@ export class World {
     this.sky.position.set(0, 10, -90);
     this.sky.renderOrder = -10;
     this.scene.add(this.sky);
+  }
+
+  _buildSigil() {
+    this.sigil = new THREE.Mesh(new THREE.PlaneGeometry(13, 13), sigilMat());
+    this.sigil.position.set(0, 0.7, -9);
+    this.sigil.rotation.x = -0.08;
+    this.sigil.renderOrder = -2;
+    this.scene.add(this.sigil);
+    this.sigilSpin = 0;
+    this.sigilFlash = 0;
+    this.sigilFlashColor = new THREE.Color();
+  }
+
+  /** A cast lights the great sigil in the spell's colour. */
+  flareSigil(color) { this.sigilFlash = 1; this.sigilFlashColor.copy(color); }
+
+  _buildShafts() {
+    this.shafts = [];
+    [[-6.5, -0.32, -6], [-2, -0.18, -4], [3.5, -0.26, -7], [8, -0.4, -5]].forEach(([x, rz, z], i) => {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(2.6 + i * 0.6, 26), shaftMat(i * 3.7));
+      m.position.set(x, 3, z); m.rotation.z = rz;
+      m.renderOrder = 1;
+      this.scene.add(m);
+      this.shafts.push(m);
+    });
   }
 
   _buildFog() {
@@ -322,6 +438,11 @@ export class World {
     spells.forEach((sp, i) => {
       const mesh = new THREE.Mesh(stoneGeometry(i + 1), stoneMat(glyphTexture(sp.template), sp.palette.a));
       mesh.scale.setScalar(0.85);
+      const aura = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 4.2), auraMat(sp.palette.a));
+      aura.position.z = -0.35;
+      aura.renderOrder = 1;
+      mesh.add(aura);
+      mesh.userData.aura = aura;
       const s = slots[i];
       mesh.position.set(s.x, s.y, s.z);
       this.scene.add(mesh);
@@ -639,6 +760,22 @@ export class World {
       const u = s.mesh.material.uniforms;
       u.uAmbient.value.copy(S.ambient); u.uFire.value = S.fire; u.uInner.value = S.inner;
       u.uHit.value = s.hit * s.hit; u.uGlow.value = S.glyph * (1 + P * 2); u.uActive.value = s.active; u.uTime.value = t;
+      s.mesh.userData.aura.material.uniforms.uI.value = 0.1 + S.glyph * 0.25 + s.active * 0.55 + S.inner * 0.35 + s.hit * 0.8 + P * 0.15;
+    }
+
+    // Great sigil + light shafts.
+    this.sigilFlash = Math.max(0, this.sigilFlash - dt * 0.45);
+    this.sigilSpin += dt * (0.05 + S.swirl * 1.6 + this.sigilFlash * 0.5) * S.timeScale;
+    const gu = this.sigil.material.uniforms;
+    gu.uTime.value = t; gu.uSpin.value = this.sigilSpin;
+    gu.uColor.value.copy(S.ambient).multiplyScalar(1.3);
+    gu.uFlash.value.copy(this.sigilFlashColor).multiplyScalar(1.15);
+    gu.uFlashAmt.value = this.sigilFlash * this.sigilFlash;
+    gu.uIntensity.value = 0.3 + S.glyph * 0.35 + P * 0.5;
+    for (const sh of this.shafts) {
+      const u = sh.material.uniforms;
+      u.uTime.value = t; u.uColor.value.copy(S.fog).lerp(S.ambient, 0.5);
+      u.uI.value = (0.3 + S.dawn * 0.5 + P * 0.4) * (0.4 + 0.6 * S.fogDensity);
     }
 
     // 4. Set pieces.

@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 import { SHAPE, KIND } from './particles.js';
 
-const MAX_RAW = 720;          // raw stroke samples (3 s at up to 240 Hz)
+const MAX_RAW = 1200;         // raw stroke samples (5 s at up to 240 Hz)
 const SUB = 4;                // Catmull-Rom subdivisions per segment
 const MAX_V = 2400;           // ribbon centreline vertices after subdivision
 const RUNE_N = 128;           // points in a resampled stroke / canonical rune
@@ -126,7 +126,25 @@ void main(){
   float core = exp(-r * r * mix(150.0, 95.0, uPinch));
   float halo = exp(-r * r * mix(9.0, 6.0, uPinch)) * (0.35 + 0.25 * breathe + 0.45 * uPinch);
   float rays = pow(max(0.0, 1.0 - abs(d.x * d.y) * 260.0), 6.0) * exp(-r * 3.5) * (0.15 + 0.5 * uPinch);
-  vec3 col = uColor * (halo + rays) + vec3(1.0, 0.96, 0.9) * core * (1.6 + 1.6 * uPinch);
+  float sparks = 0.0;
+  for (int i = 0; i < 5; i++) {
+    float ang = uTime * 2.6 + float(i) * 1.2566;
+    float rad = 0.16 + 0.02 * sin(uTime * 5.0 + float(i));
+    vec2 sp = d - rad * vec2(cos(ang), sin(ang));
+    sparks += exp(-dot(sp, sp) * 9000.0) + exp(-dot(sp, sp) * 900.0) * 0.18;
+  }
+  vec3 col = uColor * (halo + rays) + vec3(1.0, 0.96, 0.9) * core * (1.6 + 1.6 * uPinch) + vec3(1.0, 0.9, 0.7) * sparks * uPinch * 1.4;
+  gl_FragColor = vec4(col * uAlpha, 1.0);
+}`;
+
+const streakFS = /* glsl */ `
+uniform vec3 uColor; uniform float uAlpha; varying vec2 vUv;
+void main(){
+  vec2 d = (vUv - 0.5) * 2.0;
+  float streak = exp(-d.y * d.y * 900.0) * exp(-d.x * d.x * 2.5) * 1.4;     // anamorphic line
+  float halo = exp(-d.y * d.y * 60.0) * exp(-d.x * d.x * 9.0) * 0.35;
+  float core = exp(-dot(d * vec2(14.0, 1.0), d * vec2(14.0, 1.0)) * 4.0) * 1.6;  // hot centre
+  vec3 col = mix(uColor, vec3(1.0), 0.45) * (streak + halo) + vec3(1.0) * core;
   gl_FragColor = vec4(col * uAlpha, 1.0);
 }`;
 
@@ -162,6 +180,16 @@ export class Trail {
 
     this.ghostState = null;
     this._c = new THREE.Color();
+
+    // Anamorphic flare streak for the snap.
+    this.streakU = { uColor: { value: new THREE.Color() }, uAlpha: { value: 0 } };
+    this.streak = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.ShaderMaterial({
+      uniforms: this.streakU, vertexShader: tipVS, fragmentShader: streakFS,
+      blending: THREE.AdditiveBlending, transparent: true, depthTest: false, depthWrite: false,
+    }));
+    this.streak.renderOrder = 15; this.streak.visible = false;
+    scene.add(this.streak);
+    this.streakT = 1;
   }
 
   // ------------------------------------------------------------ drawing --
@@ -209,8 +237,8 @@ export class Trail {
       this.rw[i] = 0.0105 * taper * swell;
     }
     r.build(this.rx, this.ry, this.rw, n, 0.04);
-    // Strokes past the 3 s limit dim, a quiet signal they won't count.
-    const over = this.duration - 3;
+    // Strokes past the 5 s limit dim, a quiet signal they won't count.
+    const over = this.duration - 5;
     r.uniforms.uAlpha.value = over > 0 ? Math.max(0.35, 1 - over) : 1;
   }
 
@@ -354,6 +382,14 @@ export class Trail {
       }
     }
     this._updateGhost(dt);
+
+    if (this.streakT < 1) {
+      this.streakT = Math.min(1, this.streakT + dt / 0.75);
+      const k = this.streakT;
+      this.streakU.uAlpha.value = (1 - k) * (1 - k) * Math.min(1, k * 12);
+      this.streak.scale.set(1.6 + k * 2.8, 0.5 + k * 0.4, 1);
+      if (k >= 1) this.streak.visible = false;
+    }
   }
 
   _release(r) { r.mode = 'idle'; r.mesh.visible = false; r.mesh.position.set(0, 0, 0); }
@@ -384,7 +420,10 @@ export class Trail {
       for (let i = 0; i < N; i++) { this.mx[i] = to[i * 2]; this.my[i] = to[i * 2 + 1]; this.mw[i] = w; }
       r.build(this.mx, this.my, this.mw, N, 0);
       this._burst(r);
-      r.onFlare?.();
+      this.streak.position.set(r.fit.center.x, r.fit.center.y, 0);
+      this.streakU.uColor.value.copy(r.palette.a);
+      this.streakT = 0; this.streak.visible = true;
+      r.onFlare?.(r.fit.center);
     }
     const ft = t - MORPH;
     if (ft < HOLD) {

@@ -29,7 +29,9 @@ at pinned versions (three 0.187.0, @mediapipe/tasks-vision 1.2.3).
 | 5 | Five-point star | **Astra** | Fog clears to stars, constellations, meteors |
 | 6 | Wave | **Aria** | Generative ambient music; the world pulses to it. Cast again to stop |
 
-Any direction works. Cast two spells within 4 s for a combo.
+Any direction works, and wobbly is fine: a clean shape casts at a $1 score of 0.80, a messier one
+casts at 0.74 if it clearly beats every other glyph, and pinch-release hooks are forgiven.
+Cast two spells within 4 s for a combo.
 
 ## Controls
 

@@ -27,9 +27,10 @@ function poly(pts, perSeg = 24) {
   return out;
 }
 
-function circle() {
+function circle(turns = 1) {
   const out = [];
-  for (let i = 0; i <= 96; i++) {
+  const n = Math.round(96 * turns);
+  for (let i = 0; i <= n; i++) {
     const a = Math.PI / 2 + (i / 96) * Math.PI * 2;
     out.push([Math.cos(a), Math.sin(a)]);
   }
@@ -88,7 +89,7 @@ const sheared = (v) => [v, ...[-14, 14].flatMap((d) => [distort(v, d, 0.78), dis
 const boltJog = (jog) => poly([[0.32, 1], [-0.3, 0.06], [-0.3 + jog, 0.06], [-0.32, -1]]);
 
 export const GLYPHS = {
-  circle: { draw: circle(), closed: true, variants: [circle()] },
+  circle: { draw: circle(), closed: true, variants: [circle(), circle(1.12), circle(1.25), circle(0.9)] },
   bolt: { draw: bolt(), closed: false, variants: [bolt(), boltJog(0.35), boltJog(0.85)] },
   triangle: { draw: triangle(), closed: true, variants: sheared(triangle()) },
   spiral: { draw: spiral(2.5), closed: false, variants: [spiral(2), spiral(2.5), spiral(3)] },
@@ -209,11 +210,42 @@ for (const [name, g] of Object.entries(GLYPHS)) {
   }
 }
 
+/** Acceptance rule used by the app (current: strict $1 threshold). */
+// A clean match casts at 0.80 (the $1 paper's threshold). A messier stroke
+// still casts if it clearly beats every other glyph, since air-drawing is wobbly.
+export const accept = (r) => r.score >= 0.8 || (r.score >= MIN_LOOSE && r.score - (r.second?.score ?? 0) >= MARGIN);
+const MIN_LOOSE = 0.74, MARGIN = 0.08;
+
+/**
+ * Remove the short flick a pinch makes as it opens or closes: if the last
+ * (or first) ~4% of the stroke turns sharply away from the path, drop it.
+ */
+export function dehook(input) {
+  let pts = toPts(input);
+  if (pts.length < 8) return pts;
+  const L = pathLength(pts);
+  const trimEnd = (arr) => {
+    let acc = 0, k = arr.length - 1;
+    while (k > 1 && acc < L * 0.04) { acc += Math.hypot(arr[k].x - arr[k - 1].x, arr[k].y - arr[k - 1].y); k--; }
+    let acc2 = 0, j = k;
+    while (j > 0 && acc2 < L * 0.06) { acc2 += Math.hypot(arr[j].x - arr[j - 1].x, arr[j].y - arr[j - 1].y); j--; }
+    const ax = arr[arr.length - 1].x - arr[k].x, ay = arr[arr.length - 1].y - arr[k].y;
+    const bx = arr[k].x - arr[j].x, by = arr[k].y - arr[j].y;
+    const cos = (ax * bx + ay * by) / ((Math.hypot(ax, ay) * Math.hypot(bx, by)) || 1);
+    return cos < -0.3 ? arr.slice(0, k + 1) : arr; // doubled back more than ~107°
+  };
+  pts = trimEnd(pts);
+  pts = trimEnd(pts.reverse()).reverse();
+  return pts;
+}
+
 /** @returns {{name:string, score:number, reversed:boolean, second:{name:string,score:number}}} */
 export function recognize(raw) {
-  const pts = normalize(raw);
+  // Score the stroke as drawn and with pinch hooks trimmed; keep the better match per glyph.
+  const raws = toPts(raw), trimmed = dehook(raws);
+  const candidates = trimmed.length === raws.length ? [normalize(raws)] : [normalize(raws), normalize(trimmed)];
   const best = new Map();
-  for (const t of templates) {
+  for (const pts of candidates) for (const t of templates) {
     const d = distanceAtBestAngle(pts, t.points, -ANGLE_RANGE, ANGLE_RANGE, ANGLE_PRECISION);
     const score = 1 - d / HALF_DIAG;
     const prev = best.get(t.name);

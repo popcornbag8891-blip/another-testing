@@ -1,7 +1,7 @@
 // Sigil — render loop, input arbitration and the casting state machine.
 import * as THREE from 'three';
 import { Hands } from './hands.js';
-import { recognize, fitGlyph, placeGlyph, strokeLength } from './recognizer.js';
+import { recognize, accept, fitGlyph, placeGlyph, strokeLength } from './recognizer.js';
 import { SPELLS, comboName } from './spells.js';
 import { World } from './fx/world.js';
 import { Particles, SHAPE, KIND } from './fx/particles.js';
@@ -11,7 +11,8 @@ import { AudioEngine } from './audio.js';
 import { UI } from './ui.js';
 
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
-const MIN_SCORE = 0.8;
+const MAX_STROKE_S = 5;      // air-drawing is slower than mouse drawing
+const MIN_STROKE_DIAG = 0.1; // fraction of the screen diagonal
 const COMBO_WINDOW = 4;
 const PALM_HOLD = 0.6;
 const RUNE_N = 128;
@@ -173,20 +174,23 @@ function startStroke(source) {
 
 function endStroke() {
   if (!S.drawing) return;
+  const fromHand = S.source === 'hand';
   S.drawing = false; S.source = null;
   const pts = trail.points();
+  // Opening a pinch drags the fingertip; the last two tracked frames are that motion, not the glyph.
+  if (fromHand && pts.length > 12) pts.length -= 2;
   const dur = trail.duration;
   const diag = Math.hypot(2 * aspect, 2);
   const len = strokeLength(pts);
   S.lastStroke = { n: pts.length, dur: +dur.toFixed(2), len: +(len / diag).toFixed(3), result: 'junk' };
-  if (pts.length < 4 || len < 0.15 * diag || dur > 3) {
+  if (pts.length < 4 || len < MIN_STROKE_DIAG * diag || dur > MAX_STROKE_S) {
     trail.dissolveQuietly(false);         // junk: ignored, never punished
     if (S.tutorial) setTimeout(startTutorialGhost, 400);
     return;
   }
   const r = recognize(pts);
   Object.assign(S.lastStroke, { result: r.name, score: +r.score.toFixed(3) });
-  if (r.score >= MIN_SCORE) {
+  if (accept(r)) {
     const spell = spellByTemplate[r.name];
     const fit = fitGlyph(spell.template, pts, RUNE_N);
     snapAndCast(spell, fit, false);
@@ -205,8 +209,10 @@ function snapAndCast(spell, fit, reveal) {
   const tint = spell.palette.a.clone();
   if (prev) tint.lerp(prev.tint, 0.4);
   const palette = { a: tint, b: spell.palette.b };
-  trail.snap(fit, palette, () => {
+  trail.snap(fit, palette, (c) => {
     audio.chime(spell.chime);
+    world.flareSigil(tint);
+    post.shock((c.x / aspect + 1) / 2, (c.y + 1) / 2, 1);
     fire(spell, tint, prev);
   }, { reveal });
   S.misfires = 0;

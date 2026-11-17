@@ -142,7 +142,7 @@ void main(){
   v.y += m.w * uDt;
   if (uSwirl.z != 0.0) {
     vec2 d = p.xy - uSwirl.xy; float r = length(d) + 0.15;
-    v.xy += (vec2(-d.y, d.x) / r - d * 0.45) * uSwirl.z * uDt;
+    v.xy += (vec2(-d.y, d.x) / r - d * 0.08) * uSwirl.z * uDt;
   }
   if (uPulse > 0.0) v.xy += normalize(p.xy + 1e-4) * uPulse * uDt * 0.6;
   v.xy *= exp(-v.w * uDt);
@@ -197,7 +197,7 @@ void main(){
   if (r2 > 1.0) discard;
   float core = exp(-r2 * 9.0);
   float halo = exp(-r2 * 3.0);
-  float a = vKind > 0.5 && vKind < 1.5 ? halo * (1.0 - r2) : core * 1.4 + halo * 0.35;
+  float a = vKind > 0.5 && vKind < 1.5 ? halo * (1.0 - r2) : core * 1.15 + halo * 0.3;
   gl_FragColor = vec4(vCol * a * vAlpha, 1.0);
 }`;
 

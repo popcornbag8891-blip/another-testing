@@ -90,8 +90,8 @@ export const SPELLS = [
       const formation = world.rearrange();
       world.stones.forEach((s) => (s.active = 0.8));
       const P = fx.particles, s = P.spec();
-      s.shape = SHAPE.RING; s.ax = 0; s.ay = 0.05; s.bx = 0.9; s.count = 2400; s.tangential = 1.4; s.radial = -0.25; s.spread = 0.05;
-      P.color(s, fx.tint, 1.32); s.life = 2.4; s.size = 0.009; s.curl = 0.8; s.drag = 0.9;
+      s.shape = SHAPE.RING; s.ax = 0; s.ay = 0.05; s.bx = 0.9; s.count = 1100; s.tangential = 1.4; s.radial = 0.05; s.spread = 0.05;
+      P.color(s, fx.tint, 0.9); s.life = 2.4; s.size = 0.009; s.curl = 0.8; s.drag = 0.9;
       P.emit(s);
       return world.addEffect({
         attack: 0.5, hold: 4.5, release: 2.5, tag: formation,

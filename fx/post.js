@@ -12,10 +12,11 @@ const FinalShader = {
     tDiffuse: { value: null }, uTime: { value: 0 }, uRes: { value: new THREE.Vector2(1, 1) },
     uCA: { value: 0.006 }, uGrain: { value: 0.045 }, uVignette: { value: 0.85 }, uFlash: { value: 0 },
     uHeat: { value: 0 }, uExposure: { value: 1 },
+    uShockC: { value: new THREE.Vector2(0.5, 0.5) }, uShockT: { value: 1 }, uShockAmp: { value: 0 }, uAspect: { value: 1 },
   },
   vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
   fragmentShader: /* glsl */ `
-    uniform sampler2D tDiffuse; uniform float uTime, uCA, uGrain, uVignette, uFlash, uHeat, uExposure; uniform vec2 uRes;
+    uniform sampler2D tDiffuse; uniform float uTime, uCA, uGrain, uVignette, uFlash, uHeat, uExposure, uShockT, uShockAmp, uAspect; uniform vec2 uRes, uShockC;
     varying vec2 vUv;
     float h21(vec2 p){ p = fract(p * vec2(233.34, 851.73)); p += dot(p, p + 23.45); return fract(p.x * p.y); }
     float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
@@ -29,12 +30,26 @@ const FinalShader = {
         vec2 q = uv * vec2(9.0, 16.0) + vec2(0.0, -uTime * 2.2);
         uv += (vec2(vn(q), vn(q + 13.7)) - 0.5) * 0.012 * k;
       }
+      // Shockwave: a refracting ring racing out from the rune.
+      float ring = 0.0;
+      if (uShockAmp > 0.001) {
+        vec2 sd = (uv - uShockC) * vec2(uAspect, 1.0);
+        float sr = length(sd);
+        float rad = uShockT * 1.25;
+        ring = exp(-pow((sr - rad) / (0.035 + uShockT * 0.06), 2.0)) * (1.0 - uShockT);
+        uv -= (sd / max(sr, 1e-4)) / vec2(uAspect, 1.0) * ring * 0.035 * uShockAmp;
+      }
       vec2 d = uv - 0.5;
       float r2 = dot(d, d);
       vec2 off = d * uCA * (0.4 + r2 * 3.0);
       vec3 col = vec3(texture2D(tDiffuse, uv + off).r, texture2D(tDiffuse, uv).g, texture2D(tDiffuse, uv - off).b);
+      col *= 1.0 + ring * uShockAmp * 0.35;
       col = aces(col * uExposure);
       col = toSRGB(col);
+      // Grade: gentle S-curve, cool shadows, warm highlights.
+      float luma = dot(col, vec3(0.2126, 0.7152, 0.0722));
+      col = mix(col, col * col * (3.0 - 2.0 * col), 0.35);
+      col += vec3(-0.006, 0.0, 0.016) * (1.0 - luma) + vec3(0.012, 0.004, -0.01) * luma * luma;
       float vig = smoothstep(0.95, 0.18, sqrt(r2) * 1.25);
       col *= mix(1.0, vig, uVignette);
       col += (h21(vUv * uRes + fract(uTime * 37.0) * 91.0) - 0.5) * uGrain;
@@ -67,6 +82,12 @@ export class Post {
 
   flash(a) { if (!this.opts.reducedMotion) this.flashAmt = Math.max(this.flashAmt, a); }
 
+  /** Screen-space shockwave from uv (0..1). Softer, never skipped, under reduced motion. */
+  shock(u, v, amp = 1) {
+    const f = this.final.uniforms;
+    f.uShockC.value.set(u, v); f.uShockT.value = 0; f.uShockAmp.value = this.opts.reducedMotion ? amp * 0.25 : amp;
+  }
+
   setBloomScale(s) {
     this.bloomScale = s;
     const sz = this.renderer.getDrawingBufferSize(new THREE.Vector2());
@@ -85,6 +106,9 @@ export class Post {
     u.uTime.value = t;
     u.uFlash.value = this.flashAmt * this.flashAmt;
     u.uExposure.value = state.exposure;
+    u.uShockT.value = Math.min(1, u.uShockT.value + dt / 1.1);
+    if (u.uShockT.value >= 1) u.uShockAmp.value = 0;
+    u.uAspect.value = this.final.uniforms.uRes.value.x / Math.max(1, this.final.uniforms.uRes.value.y);
     u.uHeat.value = this.opts.reducedMotion ? 0 : state.fire;
     u.uCA.value = 0.0045 + shake * 0.012 + this.flashAmt * 0.01;
     this.bloom.strength = 0.7 + state.bloom;
